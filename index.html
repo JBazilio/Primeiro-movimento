@@ -160,13 +160,17 @@
             box-shadow: 0 0 12px rgba(46, 204, 113, 0.8);
             border-color: #2ecc71 !important;
         }
+        
+        /* CORREÇÃO AQUI: Evita que o navegador role a tela ao arrastar as peças no celular/tablet */
         #board {
             width: 400px;
             max-width: 100%;
             border-radius: 4px;
             overflow: hidden;
             box-shadow: 0 5px 25px rgba(0,0,0,0.25);
+            touch-action: none; 
         }
+        
         .highlight-square {
             box-shadow: inset 0 0 4px 4px rgba(241, 196, 15, 0.85) !important;
         }
@@ -454,8 +458,13 @@
         $('#board .square-' + square).addClass('highlight-square');
     }
 
-    // CORREÇÃO: Escutamos 'mousedown' ao invés de 'click' para antecipar o bloqueio do drag-and-drop
-    $(document).on('mousedown', '#board .square-55d63', function(e) {
+    // CORREÇÃO: Escuta tanto o 'mousedown' (desktop) quanto o 'touchstart' (mobile) de forma agressiva
+    $(document).on('mousedown touchstart', '#board .square-55d63', function(e) {
+        // Evita comportamentos secundários de toque do navegador
+        if (e.type === 'touchstart') {
+            e.stopPropagation();
+        }
+
         if (!jogoAtivo || game.game_over() || game.turn() !== corEscolhida) return;
 
         var square = $(this).attr('data-square');
