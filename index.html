@@ -261,10 +261,10 @@
         <div class="panel-row">
             <label for="dificuldade">Força da IA</label>
             <select id="dificuldade">
-                <option value="local">Fácil (~1300 Lichess)</option>
-                <option value="6" selected>Médio (~1700 Lichess)</option>
-                <option value="10">Difícil (~2100 Lichess)</option>
-                <option value="14">Mestre (~2500 Lichess)</option>
+                <option value="local">Fácil</option>
+                <option value="6" selected>Médio</option>
+                <option value="10">Difícil</option>
+                <option value="14">Mestre</option>
             </select>
         </div>
         <div class="panel-row">
@@ -411,35 +411,30 @@
         if (game.turn() !== corEscolhida) return false;
     }
 
-    // ENGINE LOCAL PARA O NÍVEL FÁCIL (~1300 Lichess)
-    // Calcula o valor material e posicional simples de 1 lance à frente (Minimax D1 com randomizador de erro humano)
+    // CALIBRAGEM REFORÇADA PARA O NÍVEL FÁCIL (~1400 Lichess)
     function calcularMelhorLanceLocal() {
         var lancesPosiveis = game.moves({verbose: true});
         if (lancesPosiveis.length === 0) return null;
 
-        // Tabela de pontuação de peças para avaliação
         var valoresPecas = { p: 10, n: 30, b: 30, r: 50, q: 90, k: 900 };
 
-        // Pontuação de cada lance
         var lancesAvaliados = lancesPosiveis.map(function(lance) {
             var pontuacao = 0;
             
-            // Se captura uma peça, soma o valor dela
             if (lance.captured) {
                 pontuacao += valoresPecas[lance.captured] * 10;
             }
             
-            // Se promove peça, ganha vantagem
             if (lance.promotion) {
                 pontuacao += 80;
             }
 
-            // Simula desenvolvimento básico (peças centrais)
+            // Centralização mais valorizada (melhora o jogo posicional)
             if (lance.piece === 'p' && (lance.to === 'd4' || lance.to === 'e4' || lance.to === 'd5' || lance.to === 'e5')) {
-                pontuacao += 5;
+                pontuacao += 8;
             }
             if ((lance.piece === 'n' || lance.piece === 'b') && (lance.to.match(/[c-f][3-6]/))) {
-                pontuacao += 3;
+                pontuacao += 6;
             }
 
             // Executa o lance temporariamente para ver se coloca o oponente em xeque
@@ -450,14 +445,12 @@
             return { lance: lance, score: pontuacao };
         });
 
-        // Ordena lances do melhor para o pior
         lancesAvaliados.sort(function(a, b) { return b.score - a.score; });
 
-        // Para simular um rating ~1300, a IA escolhe o melhor lance em 70% das vezes, 
-        // mas em 30% ela pode fazer o 2º ou 3º melhor lance da lista (simula pequenos erros humanos).
+        // Redução da taxa de erro para 15% (deixando o computador mais astuto e estável)
         var indiceEscolhido = 0;
-        if (Math.random() < 0.30 && lancesAvaliados.length > 1) {
-            indiceEscolhido = Math.floor(Math.random() * Math.min(3, lancesAvaliados.length));
+        if (Math.random() < 0.15 && lancesAvaliados.length > 1) {
+            indiceEscolhido = Math.floor(Math.random() * Math.min(2, lancesAvaliados.length));
         }
 
         return lancesAvaliados[indiceEscolhido].lance;
@@ -468,7 +461,6 @@
         var profundidade = $('#dificuldade').val(); 
         atualizarDestaqueTurno();
 
-        // SE SELECIONADO O NÍVEL FÁCIL: Roda localmente sem API!
         if (profundidade === 'local') {
             window.setTimeout(function() {
                 var lanceLocal = calcularMelhorLanceLocal();
@@ -480,9 +472,8 @@
                     verificarFimDeJogo();
                     atualizarDestaqueTurno();
                 }
-            }, 350); // Simula uma leve pausa de "pensamento"
+            }, 350); 
         } else {
-            // Outros níveis rodam via Stockfish Online
             var fenAtual = game.fen();
             $.getJSON('https://stockfish.online/api/s/v2.php?fen=' + encodeURIComponent(fenAtual) + '&depth=' + profundidade, function(data) {
                 if (data && data.success && data.bestmove) {
@@ -711,7 +702,7 @@
             aceitaEmpate = true;
         } else {
             var numeroAleatorio = Math.random();
-            if (profundidade === 'local') { if (numeroAleatorio < 0.75) aceitaEmpate = true; } 
+            if (profundidade === 'local') { if (numeroAleatorio < 0.70) aceitaEmpate = true; } 
             else if (profundidade === '6') { if (numeroAleatorio < 0.40) aceitaEmpate = true; } 
             else if (profundidade === '10') { if (numeroAleatorio < 0.10) aceitaEmpate = true; }
             else if (profundidade === '14') { if (numeroAleatorio < 0.02) aceitaEmpate = true; }
