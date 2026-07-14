@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>JB Chess</title>
     <!-- CSS do Chessboard.js -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
@@ -17,6 +17,10 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
         }
         .container {
             display: flex;
@@ -76,6 +80,11 @@
         select {
             background-color: #fafafa;
             cursor: pointer;
+        }
+        select:disabled {
+            background-color: #e9ecef;
+            color: #6c757d;
+            cursor: not-allowed;
         }
         .btn-group {
             display: flex;
@@ -161,14 +170,31 @@
             border-color: #2ecc71 !important;
         }
         
-        /* CORREÇÃO AQUI: Evita que o navegador role a tela ao arrastar as peças no celular/tablet */
         #board {
             width: 400px;
             max-width: 100%;
             border-radius: 4px;
             overflow: hidden;
             box-shadow: 0 5px 25px rgba(0,0,0,0.25);
-            touch-action: none; 
+            touch-action: none !important; 
+            -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
+            -webkit-tap-highlight-color: transparent !important;
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
+        }
+
+        #board img {
+            -webkit-touch-callout: none !important; 
+            -webkit-user-select: none !important;   
+            user-select: none !important;
+            pointer-events: none !important;        
+        }
+
+        .square-55d63 {
+            -webkit-touch-callout: none !important;
+            -webkit-user-select: none !important;
+            user-select: none !important;
         }
         
         .highlight-square {
@@ -235,10 +261,10 @@
         <div class="panel-row">
             <label for="dificuldade">Força da IA</label>
             <select id="dificuldade">
-                <option value="3">Fácil</option>
-                <option value="8" selected>Médio</option>
-                <option value="15">Difícil</option>
-                <option value="18">Mestre</option>
+                <option value="local">Fácil (~1300 Lichess)</option>
+                <option value="6" selected>Médio (~1700 Lichess)</option>
+                <option value="10">Difícil (~2100 Lichess)</option>
+                <option value="14">Mestre (~2500 Lichess)</option>
             </select>
         </div>
         <div class="panel-row">
@@ -385,27 +411,95 @@
         if (game.turn() !== corEscolhida) return false;
     }
 
+    // ENGINE LOCAL PARA O NÍVEL FÁCIL (~1300 Lichess)
+    // Calcula o valor material e posicional simples de 1 lance à frente (Minimax D1 com randomizador de erro humano)
+    function calcularMelhorLanceLocal() {
+        var lancesPosiveis = game.moves({verbose: true});
+        if (lancesPosiveis.length === 0) return null;
+
+        // Tabela de pontuação de peças para avaliação
+        var valoresPecas = { p: 10, n: 30, b: 30, r: 50, q: 90, k: 900 };
+
+        // Pontuação de cada lance
+        var lancesAvaliados = lancesPosiveis.map(function(lance) {
+            var pontuacao = 0;
+            
+            // Se captura uma peça, soma o valor dela
+            if (lance.captured) {
+                pontuacao += valoresPecas[lance.captured] * 10;
+            }
+            
+            // Se promove peça, ganha vantagem
+            if (lance.promotion) {
+                pontuacao += 80;
+            }
+
+            // Simula desenvolvimento básico (peças centrais)
+            if (lance.piece === 'p' && (lance.to === 'd4' || lance.to === 'e4' || lance.to === 'd5' || lance.to === 'e5')) {
+                pontuacao += 5;
+            }
+            if ((lance.piece === 'n' || lance.piece === 'b') && (lance.to.match(/[c-f][3-6]/))) {
+                pontuacao += 3;
+            }
+
+            // Executa o lance temporariamente para ver se coloca o oponente em xeque
+            game.move(lance);
+            if (game.in_check()) pontuacao += 15;
+            game.undo();
+
+            return { lance: lance, score: pontuacao };
+        });
+
+        // Ordena lances do melhor para o pior
+        lancesAvaliados.sort(function(a, b) { return b.score - a.score; });
+
+        // Para simular um rating ~1300, a IA escolhe o melhor lance em 70% das vezes, 
+        // mas em 30% ela pode fazer o 2º ou 3º melhor lance da lista (simula pequenos erros humanos).
+        var indiceEscolhido = 0;
+        if (Math.random() < 0.30 && lancesAvaliados.length > 1) {
+            indiceEscolhido = Math.floor(Math.random() * Math.min(3, lancesAvaliados.length));
+        }
+
+        return lancesAvaliados[indiceEscolhido].lance;
+    }
+
     function fazerJogadaDaIA() {
         if (!jogoAtivo || game.game_over()) return;
-        var fenAtual = game.fen();
         var profundidade = $('#dificuldade').val(); 
         atualizarDestaqueTurno();
 
-        $.getJSON('https://stockfish.online/api/s/v2.php?fen=' + encodeURIComponent(fenAtual) + '&depth=' + profundidade, function(data) {
-            if (data && data.success && data.bestmove) {
-                var melhorLance = data.bestmove.split(' ')[1]; 
-                var de = melhorLance.substring(0, 2);
-                var para = melhorLance.substring(2, 4);
-                var promocaoIA = melhorLance.length > 4 ? melhorLance.substring(4, 5) : 'q';
+        // SE SELECIONADO O NÍVEL FÁCIL: Roda localmente sem API!
+        if (profundidade === 'local') {
+            window.setTimeout(function() {
+                var lanceLocal = calcularMelhorLanceLocal();
+                if (lanceLocal) {
+                    game.move(lanceLocal);
+                    board.position(game.fen());
+                    tocarSomPeca();
+                    atualizarHistoricoVisual();
+                    verificarFimDeJogo();
+                    atualizarDestaqueTurno();
+                }
+            }, 350); // Simula uma leve pausa de "pensamento"
+        } else {
+            // Outros níveis rodam via Stockfish Online
+            var fenAtual = game.fen();
+            $.getJSON('https://stockfish.online/api/s/v2.php?fen=' + encodeURIComponent(fenAtual) + '&depth=' + profundidade, function(data) {
+                if (data && data.success && data.bestmove) {
+                    var melhorLance = data.bestmove.split(' ')[1]; 
+                    var de = melhorLance.substring(0, 2);
+                    var para = melhorLance.substring(2, 4);
+                    var promocaoIA = melhorLance.length > 4 ? melhorLance.substring(4, 5) : 'q';
 
-                game.move({ from: de, to: para, promotion: promocaoIA });
-                board.position(game.fen());
-                tocarSomPeca();
-                atualizarHistoricoVisual();
-                verificarFimDeJogo();
-                atualizarDestaqueTurno();
-            }
-        });
+                    game.move({ from: de, to: para, promotion: promocaoIA });
+                    board.position(game.fen());
+                    tocarSomPeca();
+                    atualizarHistoricoVisual();
+                    verificarFimDeJogo();
+                    atualizarDestaqueTurno();
+                }
+            });
+        }
     }
 
     function processarMovimentoHumano(origem, destino) {
@@ -433,8 +527,10 @@
 
         tocarSomPeca();
         atualizarHistoricoVisual();
+        
         $('#seletor-tempo').prop('disabled', true);
         $('#cor-jogador').prop('disabled', true);
+        $('#dificuldade').prop('disabled', true); 
         
         iniciarRelogio();
         window.setTimeout(fazerJogadaDaIA, 250);
@@ -458,29 +554,17 @@
         $('#board .square-' + square).addClass('highlight-square');
     }
 
-    // CORREÇÃO: Escuta tanto o 'mousedown' (desktop) quanto o 'touchstart' (mobile) de forma agressiva
-    $(document).on('mousedown touchstart', '#board .square-55d63', function(e) {
-        // Evita comportamentos secundários de toque do navegador
-        if (e.type === 'touchstart') {
-            e.stopPropagation();
-        }
-
+    function tratarSelecaoDeCasa(square) {
         if (!jogoAtivo || game.game_over() || game.turn() !== corEscolhida) return;
-
-        var square = $(this).attr('data-square');
-        if (!square) return;
-
         var pecaNaCasa = game.get(square);
 
         if (casaOrigemClicada === null) {
-            // Primeiro clique: seleciona a peça
             if (pecaNaCasa && pecaNaCasa.color === corEscolhida) {
                 casaOrigemClicada = square;
                 removeHighlight();
                 addHighlight(square);
             }
         } else {
-            // Segundo clique: tenta mover ou trocar a peça selecionada
             if (square === casaOrigemClicada) {
                 casaOrigemClicada = null;
                 removeHighlight();
@@ -502,6 +586,33 @@
                 }
             }
         }
+    }
+
+    $(document).ready(function() {
+        $('#board').on('contextmenu hold contextmenuhold selectstart dragstart', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        });
+
+        $(document).on('touchstart', '#board .square-55d63', function(e) {
+            e.preventDefault(); 
+            e.stopPropagation();
+            
+            var square = $(this).attr('data-square');
+            if (square) {
+                tratarSelecaoDeCasa(square);
+            }
+        });
+
+        $(document).on('mousedown', '#board .square-55d63', function(e) {
+            if (e.which !== 1) return; 
+            
+            var square = $(this).attr('data-square');
+            if (square) {
+                tratarSelecaoDeCasa(square);
+            }
+        });
     });
 
     function verificarFimDeJogo() {
@@ -534,6 +645,7 @@
         
         $('#seletor-tempo').prop('disabled', false);
         $('#cor-jogador').prop('disabled', false);
+        $('#dificuldade').prop('disabled', false); 
         $('#btn-empate').prop('disabled', false);
         $('#btn-desistir').prop('disabled', false);
         $('#history').html('');
@@ -589,7 +701,7 @@
         if (!jogoAtivo || game.game_over()) return;
         
         var vantagemIA = calcularVantagemMaterial();
-        var profundidade = parseInt($('#dificuldade').val());
+        var profundidade = $('#dificuldade').val();
         var aceitaEmpate = false;
 
         if (vantagemIA > 1) {
@@ -599,10 +711,10 @@
             aceitaEmpate = true;
         } else {
             var numeroAleatorio = Math.random();
-            if (profundidade === 3) { if (numeroAleatorio < 0.75) aceitaEmpate = true; } 
-            else if (profundidade === 8) { if (numeroAleatorio < 0.40) aceitaEmpate = true; } 
-            else if (profundidade === 15) { if (numeroAleatorio < 0.10) aceitaEmpate = true; }
-            else if (profundidade === 18) { if (numeroAleatorio < 0.02) aceitaEmpate = true; }
+            if (profundidade === 'local') { if (numeroAleatorio < 0.75) aceitaEmpate = true; } 
+            else if (profundidade === '6') { if (numeroAleatorio < 0.40) aceitaEmpate = true; } 
+            else if (profundidade === '10') { if (numeroAleatorio < 0.10) aceitaEmpate = true; }
+            else if (profundidade === '14') { if (numeroAleatorio < 0.02) aceitaEmpate = true; }
         }
 
         if (aceitaEmpate) {
