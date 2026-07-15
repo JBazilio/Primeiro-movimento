@@ -100,9 +100,8 @@
             font-weight: bold;
             transition: background 0.2s;
         }
-        #btn-reiniciar:hover {
-            background-color: #219653;
-        }
+        #btn-reiniciar:hover { background-color: #219653; }
+        
         #btn-inverter {
             background-color: #34495e;
             color: white;
@@ -111,9 +110,8 @@
             font-weight: bold;
             transition: background 0.2s;
         }
-        #btn-inverter:hover {
-            background-color: #2c3e50;
-        }
+        #btn-inverter:hover { background-color: #2c3e50; }
+        
         #btn-desistir {
             background-color: #e74c3c;
             color: white;
@@ -122,9 +120,8 @@
             font-weight: bold;
             transition: background 0.2s;
         }
-        #btn-desistir:hover {
-            background-color: #c0392b;
-        }
+        #btn-desistir:hover { background-color: #c0392b; }
+        
         #btn-empate {
             background-color: #7f8c8d;
             color: white;
@@ -133,9 +130,8 @@
             font-weight: bold;
             transition: background 0.2s;
         }
-        #btn-empate:hover {
-            background-color: #707b7c;
-        }
+        #btn-empate:hover { background-color: #707b7c; }
+
         .clocks-container {
             width: 400px;
             max-width: 100%;
@@ -170,31 +166,26 @@
             border-color: #2ecc71 !important;
         }
         
+        /* CORREÇÕES PARA MOBILE E DESKTOP DRAG & DROP */
         #board {
             width: 400px;
             max-width: 100%;
             border-radius: 4px;
             overflow: hidden;
             box-shadow: 0 5px 25px rgba(0,0,0,0.25);
-            touch-action: none !important; 
-            -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
-            -webkit-tap-highlight-color: transparent !important;
-            -webkit-touch-callout: none !important;
-            -webkit-user-select: none !important;
-            user-select: none !important;
+            touch-action: none; 
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
-
-        #board img {
-            -webkit-touch-callout: none !important; 
-            -webkit-user-select: none !important;   
-            user-select: none !important;
-            pointer-events: none !important;        
-        }
-
         .square-55d63 {
-            -webkit-touch-callout: none !important;
-            -webkit-user-select: none !important;
-            user-select: none !important;
+            touch-action: none;
+        }
+        #board img {
+            -webkit-user-drag: none; 
+            user-drag: none;
+            -webkit-touch-callout: none;
+            pointer-events: none; /* Impede o menu do Safari mobile ao segurar a peça */
         }
         
         .highlight-square {
@@ -310,12 +301,81 @@
     var intervaloRelogio = null;
     var jogoAtivo = true;
     var corEscolhida = 'w'; 
-    
     var casaOrigemClicada = null;
+    var audioCtx = null;
 
-    var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var VALORES_PECAS = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
+
+    var TABELA_PEAO = [
+        [0,  0,  0,  0,  0,  0,  0,  0],
+        [50, 50, 50, 50, 50, 50, 50, 50],
+        [10, 10, 20, 30, 30, 20, 10, 10],
+        [5,  5, 10, 25, 25, 10,  5,  5],
+        [0,  0,  0, 20, 20,  0,  0,  0],
+        [5, -5,-10,  0,  0,-10, -5,  5],
+        [5, 10, 10,-20,-20, 10, 10,  5],
+        [0,  0,  0,  0,  0,  0,  0,  0]
+    ];
+
+    var TABELA_CAVALO = [
+        [-50,-40,-30,-30,-30,-30,-40,-50],
+        [-40,-20,  0,  0,  0,  0,-20,-40],
+        [-30,  0, 10, 15, 15, 10,  0,-30],
+        [-30,  5, 15, 20, 20, 15,  5,-30],
+        [-30,  0, 15, 20, 20, 15,  0,-30],
+        [-30,  5, 10, 15, 15, 10,  5,-30],
+        [-40,-20,  0,  5,  5,  0,-20,-40],
+        [-50,-40,-30,-30,-30,-30,-40,-50]
+    ];
+
+    var TABELA_BISPO = [
+        [-20,-10,-10,-10,-10,-10,-10,-20],
+        [-10,  0,  0,  0,  0,  0,  0,-10],
+        [-10,  0,  5, 10, 10,  5,  0,-10],
+        [-10,  5,  5, 10, 10,  5,  5,-10],
+        [-10,  0, 10, 10, 10, 10,  0,-10],
+        [-10, 10, 10, 10, 10, 10, 10,-10],
+        [-10,  5,  0,  0,  0,  0,  5,-10],
+        [-20,-10,-10,-10,-10,-10,-10,-20]
+    ];
+
+    var TABELA_TORRE = [
+        [0,  0,  0,  0,  0,  0,  0,  0],
+        [5, 10, 10, 10, 10, 10, 10,  5],
+        [-5,  0,  0,  0,  0,  0,  0, -5],
+        [-5,  0,  0,  0,  0,  0,  0, -5],
+        [-5,  0,  0,  0,  0,  0,  0, -5],
+        [-5,  0,  0,  0,  0,  0,  0, -5],
+        [-5,  0,  0,  0,  0,  0,  0, -5],
+        [0,  0,  0,  5,  5,  0,  0,  0]
+    ];
+
+    var TABELA_DAMA = [
+        [-20,-10,-10, -5, -5,-10,-10,-20],
+        [-10,  0,  0,  0,  0,  0,  0,-10],
+        [-10,  0,  5,  5,  5,  5,  0,-10],
+        [-5,  0,  5,  5,  5,  5,  0, -5],
+        [0,  0,  5,  5,  5,  5,  0, -5],
+        [-10,  5,  5,  5,  5,  5,  0,-10],
+        [-10,  0,  5,  0,  0,  5,  0,-10],
+        [-20,-10,-10, -5, -5,-10,-10,-20]
+    ];
+
+    var TABELA_REI = [
+        [-30,-40,-40,-50,-50,-40,-40,-30],
+        [-30,-40,-40,-50,-50,-40,-40,-30],
+        [-30,-40,-40,-50,-50,-40,-40,-30],
+        [-30,-40,-40,-50,-50,-40,-40,-30],
+        [-20,-30,-30,-40,-40,-30,-30,-20],
+        [-10,-20,-20,-20,-20,-20,-20,-10],
+        [20, 20,  0,  0,  0,  0, 20, 20],
+        [20, 30, 10,  0,  0, 10, 30, 20]
+    ];
 
     function tocarSomPeca() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
         if (audioCtx.state === 'suspended') audioCtx.resume();
         var osc = audioCtx.createOscillator();
         var gain = audioCtx.createGain();
@@ -370,7 +430,7 @@
             if (tempoJogador <= 0) {
                 jogoAtivo = false;
                 clearInterval(intervaloRelogio);
-                alert("O seu tempo acabou! Vitória do JB CHESS por tempo.");
+                setTimeout(function() { alert("O seu tempo acabou! Vitória do JB CHESS por tempo."); }, 100);
             }
         } else {
             tempoIA--;
@@ -378,7 +438,7 @@
             if (tempoIA <= 0) {
                 jogoAtivo = false;
                 clearInterval(intervaloRelogio);
-                alert("O tempo do JB CHESS acabou! Sua vitória por tempo.");
+                setTimeout(function() { alert("O tempo do JB CHESS acabou! Sua vitória por tempo."); }, 100);
             }
         }
         atualizarDestaqueTurno();
@@ -404,56 +464,164 @@
         $box.scrollTop($box[0].scrollHeight); 
     }
 
-    function onDragStart(source, piece, position, orientation) {
-        if (!jogoAtivo || game.game_over()) return false;
-        if (game.turn() === 'w' && piece.search(/^b/) !== -1) return false;
-        if (game.turn() === 'b' && piece.search(/^w/) !== -1) return false;
-        if (game.turn() !== corEscolhida) return false;
+    function verificarFimDeJogo() {
+        if (game.in_checkmate()) {
+            jogoAtivo = false;
+            clearInterval(intervaloRelogio);
+            setTimeout(function() { alert("Fim de jogo! Xeque-mate."); }, 200);
+        } else if (game.in_draw()) {
+            jogoAtivo = false;
+            clearInterval(intervaloRelogio);
+            setTimeout(function() { alert("Fim de jogo! Partida empatada."); }, 200);
+        }
     }
 
-    // CALIBRAGEM REFORÇADA PARA O NÍVEL FÁCIL (~1400 Lichess)
-    function calcularMelhorLanceLocal() {
-        var lancesPosiveis = game.moves({verbose: true});
-        if (lancesPosiveis.length === 0) return null;
+    function obterValorPosicional(peca, x, y) {
+        var tabela;
+        switch(peca.type) {
+            case 'p': tabela = TABELA_PEAO; break;
+            case 'n': tabela = TABELA_CAVALO; break;
+            case 'b': tabela = TABELA_BISPO; break;
+            case 'r': tabela = TABELA_TORRE; break;
+            case 'q': tabela = TABELA_DAMA; break;
+            case 'k': tabela = TABELA_REI; break;
+            default: return 0;
+        }
+        if (peca.color === 'b') {
+            return tabela[7 - y][x];
+        }
+        return tabela[y][x];
+    }
 
-        var valoresPecas = { p: 10, n: 30, b: 30, r: 50, q: 90, k: 900 };
-
-        var lancesAvaliados = lancesPosiveis.map(function(lance) {
-            var pontuacao = 0;
-            
-            if (lance.captured) {
-                pontuacao += valoresPecas[lance.captured] * 10;
+    function avaliarTabuleiroCompleto(tabuleiro) {
+        var pontuacaoTotal = 0;
+        for (var r = 0; r < 8; r++) {
+            for (var c = 0; c < 8; c++) {
+                var casa = tabuleiro[r][c];
+                if (casa) {
+                    var valorBase = VALORES_PECAS[casa.type];
+                    var valorPosicional = obterValorPosicional(casa, c, r);
+                    
+                    if (casa.color === 'w') {
+                        pontuacaoTotal += (valorBase + valorPosicional);
+                    } else {
+                        pontuacaoTotal -= (valorBase + valorPosicional);
+                    }
+                }
             }
-            
-            if (lance.promotion) {
-                pontuacao += 80;
-            }
+        }
+        return pontuacaoTotal;
+    }
 
-            // Centralização mais valorizada (melhora o jogo posicional)
-            if (lance.piece === 'p' && (lance.to === 'd4' || lance.to === 'e4' || lance.to === 'd5' || lance.to === 'e5')) {
-                pontuacao += 8;
-            }
-            if ((lance.piece === 'n' || lance.piece === 'b') && (lance.to.match(/[c-f][3-6]/))) {
-                pontuacao += 6;
-            }
-
-            // Executa o lance temporariamente para ver se coloca o oponente em xeque
-            game.move(lance);
-            if (game.in_check()) pontuacao += 15;
-            game.undo();
-
-            return { lance: lance, score: pontuacao };
-        });
-
-        lancesAvaliados.sort(function(a, b) { return b.score - a.score; });
-
-        // Redução da taxa de erro para 15% (deixando o computador mais astuto e estável)
-        var indiceEscolhido = 0;
-        if (Math.random() < 0.15 && lancesAvaliados.length > 1) {
-            indiceEscolhido = Math.floor(Math.random() * Math.min(2, lancesAvaliados.length));
+    function minimax(profundidade, isMaximizando, alfa, beta) {
+        if (profundidade === 0 || game.game_over()) {
+            return avaliarTabuleiroCompleto(game.board());
         }
 
-        return lancesAvaliados[indiceEscolhido].lance;
+        var lances = game.moves();
+        
+        if (isMaximizando) {
+            var melhorValor = -Infinity;
+            for (var i = 0; i < lances.length; i++) {
+                game.move(lances[i]);
+                melhorValor = Math.max(melhorValor, minimax(profundidade - 1, false, alfa, beta));
+                game.undo();
+                alfa = Math.max(alfa, melhorValor);
+                if (beta <= alfa) break; 
+            }
+            return melhorValor;
+        } else {
+            var melhorValor = Infinity;
+            for (var i = 0; i < lances.length; i++) {
+                game.move(lances[i]);
+                melhorValor = Math.min(melhorValor, minimax(profundidade - 1, true, alfa, beta));
+                game.undo();
+                beta = Math.min(beta, melhorValor);
+                if (beta <= alfa) break; 
+            }
+            return melhorValor;
+        }
+    }
+
+    function calcularMelhorLanceLocal() {
+        var lancesPossiveis = game.moves({ verbose: true });
+        if (lancesPossiveis.length === 0) return null;
+
+        var melhorLance = null;
+        var corIA = game.turn(); 
+        
+        if (corIA === 'w') {
+            var melhorPontuacao = -Infinity;
+            for (var i = 0; i < lancesPossiveis.length; i++) {
+                var lance = lancesPossiveis[i];
+                game.move(lance);
+                var valorLance = minimax(2, false, -Infinity, Infinity); 
+                game.undo();
+                
+                if (valorLance > melhorPontuacao) {
+                    melhorPontuacao = valorLance;
+                    melhorLance = lance;
+                }
+            }
+        } else {
+            var melhorPontuacao = Infinity;
+            for (var i = 0; i < lancesPossiveis.length; i++) {
+                var lance = lancesPossiveis[i];
+                game.move(lance);
+                var valorLance = minimax(2, true, -Infinity, Infinity);
+                game.undo();
+                
+                if (valorLance < melhorPontuacao) {
+                    melhorPontuacao = valorLance;
+                    melhorLance = lance;
+                }
+            }
+        }
+
+        if (Math.random() < 0.05 && lancesPossiveis.length > 1) {
+            var lancesSemOMelhor = lancesPossiveis.filter(function(l) { 
+                return l.from !== melhorLance.from || l.to !== melhorLance.to; 
+            });
+            return lancesSemOMelhor[Math.floor(Math.random() * lancesSemOMelhor.length)];
+        }
+
+        return melhorLance;
+    }
+
+    function contarPecasNoTabuleiro() {
+        var tabuleiro = game.board();
+        var total = 0;
+        for (var r = 0; r < 8; r++) {
+            for (var c = 0; c < 8; c++) {
+                if (tabuleiro[r][c] !== null) total++;
+            }
+        }
+        return total;
+    }
+
+    function buscarNaTablebaseSyzygy(callbackFallback) {
+        var fenAtual = game.fen();
+        $.getJSON('https://tablebase.lichess.ovh/standard?fen=' + encodeURIComponent(fenAtual))
+        .done(function(data) {
+            if (data && data.moves && data.moves.length > 0) {
+                var melhorLanceUci = data.moves[0].uci;
+                var de = melhorLanceUci.substring(0, 2);
+                var para = melhorLanceUci.substring(2, 4);
+                var promocao = melhorLanceUci.length > 4 ? melhorLanceUci.substring(4, 5) : 'q';
+
+                game.move({ from: de, to: para, promotion: promocao });
+                board.position(game.fen());
+                tocarSomPeca();
+                atualizarHistoricoVisual();
+                verificarFimDeJogo();
+                atualizarDestaqueTurno();
+            } else {
+                callbackFallback();
+            }
+        })
+        .fail(function() {
+            callbackFallback();
+        });
     }
 
     function fazerJogadaDaIA() {
@@ -463,19 +631,17 @@
 
         if (profundidade === 'local') {
             window.setTimeout(function() {
-                var lanceLocal = calcularMelhorLanceLocal();
-                if (lanceLocal) {
-                    game.move(lanceLocal);
-                    board.position(game.fen());
-                    tocarSomPeca();
-                    atualizarHistoricoVisual();
-                    verificarFimDeJogo();
-                    atualizarDestaqueTurno();
+                var totalPecas = contarPecasNoTabuleiro();
+                if (totalPecas <= 6 && Math.random() < 0.50) {
+                    buscarNaTablebaseSyzygy(fazerFallbackIA);
+                } else {
+                    fazerFallbackIA();
                 }
             }, 350); 
         } else {
             var fenAtual = game.fen();
-            $.getJSON('https://stockfish.online/api/s/v2.php?fen=' + encodeURIComponent(fenAtual) + '&depth=' + profundidade, function(data) {
+            $.getJSON('https://stockfish.online/api/s/v2.php?fen=' + encodeURIComponent(fenAtual) + '&depth=' + profundidade)
+            .done(function(data) {
                 if (data && data.success && data.bestmove) {
                     var melhorLance = data.bestmove.split(' ')[1]; 
                     var de = melhorLance.substring(0, 2);
@@ -488,12 +654,29 @@
                     atualizarHistoricoVisual();
                     verificarFimDeJogo();
                     atualizarDestaqueTurno();
+                } else {
+                    fazerFallbackIA();
                 }
+            })
+            .fail(function() {
+                fazerFallbackIA();
             });
         }
     }
 
-    function processarMovimentoHumano(origem, destino) {
+    function fazerFallbackIA() {
+        var lanceLocal = calcularMelhorLanceLocal();
+        if (lanceLocal) {
+            game.move(lanceLocal);
+            board.position(game.fen());
+            tocarSomPeca();
+            atualizarHistoricoVisual();
+            verificarFimDeJogo();
+            atualizarDestaqueTurno();
+        }
+    }
+
+    function processarMovimentoHumano(origem, destino, isDragDrop) {
         var ehPromocao = false;
         var peao = game.get(origem);
         if (peao && peao.type === 'p') {
@@ -503,7 +686,7 @@
         }
         var pecaEscolhida = 'q';
         if (ehPromocao) {
-            var resposta = prompt("Promoção! Digite a letra da peça desejada:\nD = Dama\nT = Torre\nB = Bispo\nC = Cavalo", "D");
+            var resposta = prompt("Promoção! Digite a letra da peça:\nD = Dama\nT = Torre\nB = Bispo\nC = Cavalo", "D");
             if (resposta) {
                 resposta = resposta.toUpperCase();
                 if (resposta === 'D') pecaEscolhida = 'q';
@@ -518,32 +701,45 @@
 
         tocarSomPeca();
         atualizarHistoricoVisual();
-        
-        $('#seletor-tempo').prop('disabled', true);
-        $('#cor-jogador').prop('disabled', true);
-        $('#dificuldade').prop('disabled', true); 
-        
-        iniciarRelogio();
-        window.setTimeout(fazerJogadaDaIA, 250);
+        verificarFimDeJogo();
+
+        board.position(game.fen());
+
+        if (jogoAtivo) {
+            $('#seletor-tempo').prop('disabled', true);
+            $('#cor-jogador').prop('disabled', true);
+            $('#dificuldade').prop('disabled', true); 
+            
+            iniciarRelogio();
+            window.setTimeout(fazerJogadaDaIA, 250);
+        }
         return true;
     }
 
-    function onDrop(source, target) {
-        removeHighlight();
+    function removeHighlight() { $('#board .square-55d63').removeClass('highlight-square'); }
+    function addHighlight(square) { $('#board .square-' + square).addClass('highlight-square'); }
+
+    function onDragStart(source, piece, position, orientation) {
+        if (!jogoAtivo || game.game_over()) return false;
+        if (game.turn() === 'w' && piece.search(/^b/) !== -1) return false;
+        if (game.turn() === 'b' && piece.search(/^w/) !== -1) return false;
+        if (game.turn() !== corEscolhida) return false;
+        
         casaOrigemClicada = null;
-        var sucesso = processarMovimentoHumano(source, target);
+        removeHighlight();
+    }
+
+    function onDrop(source, target) {
+        if (source === target) return 'snapback';
+        
+        var sucesso = processarMovimentoHumano(source, target, true);
+        casaOrigemClicada = null;
+        removeHighlight();
+        
         if (!sucesso) return 'snapback';
     }
 
     function onSnapEnd() { board.position(game.fen()); }
-
-    function removeHighlight() {
-        $('#board .square-55d63').removeClass('highlight-square');
-    }
-
-    function addHighlight(square) {
-        $('#board .square-' + square).addClass('highlight-square');
-    }
 
     function tratarSelecaoDeCasa(square) {
         if (!jogoAtivo || game.game_over() || game.turn() !== corEscolhida) return;
@@ -560,9 +756,8 @@
                 casaOrigemClicada = null;
                 removeHighlight();
             } else {
-                var executou = processarMovimentoHumano(casaOrigemClicada, square);
+                var executou = processarMovimentoHumano(casaOrigemClicada, square, false);
                 if (executou) {
-                    board.position(game.fen());
                     casaOrigemClicada = null;
                     removeHighlight();
                 } else {
@@ -580,44 +775,24 @@
     }
 
     $(document).ready(function() {
-        $('#board').on('contextmenu hold contextmenuhold selectstart dragstart', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            return false;
-        });
-
-        $(document).on('touchstart', '#board .square-55d63', function(e) {
-            e.preventDefault(); 
-            e.stopPropagation();
+        var touchHandled = false;
+        
+        $('#board').on('mousedown touchstart', function(e) {
+            if (e.type === 'touchstart') touchHandled = true;
+            else if (e.type === 'mousedown' && touchHandled) { touchHandled = false; return; }
+            if (e.type === 'mousedown' && e.which !== 1) return; 
             
-            var square = $(this).attr('data-square');
-            if (square) {
-                tratarSelecaoDeCasa(square);
-            }
-        });
-
-        $(document).on('mousedown', '#board .square-55d63', function(e) {
-            if (e.which !== 1) return; 
+            var target = e.target;
             
-            var square = $(this).attr('data-square');
-            if (square) {
-                tratarSelecaoDeCasa(square);
-            }
+            setTimeout(function() {
+                var squareEl = $(target).closest('.square-55d63');
+                if (squareEl.length) {
+                    var square = squareEl.attr('data-square');
+                    if (square) tratarSelecaoDeCasa(square);
+                }
+            }, 10);
         });
     });
-
-    function verificarFimDeJogo() {
-        if (game.in_checkmate()) {
-            jogoAtivo = false;
-            clearInterval(intervaloRelogio);
-            alert("Fim de jogo! Xeque-mate.");
-        } else if (game.in_draw()) {
-            jogoAtivo = false;
-            clearInterval(intervaloRelogio);
-            alert("Fim de jogo! Partida empatada.");
-        }
-        atualizarDestaqueTurno();
-    }
 
     function reiniciarPartida() {
         clearInterval(intervaloRelogio);
@@ -690,7 +865,6 @@
 
     $('#btn-empate').on('click', function() {
         if (!jogoAtivo || game.game_over()) return;
-        
         var vantagemIA = calcularVantagemMaterial();
         var profundidade = $('#dificuldade').val();
         var aceitaEmpate = false;
